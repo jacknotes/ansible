@@ -73,6 +73,8 @@
 - 网络可达目标节点（SSH 22端口）
 - 确保 fact 收集已启用（默认启用，`ansible.cfg` 中已配置 `gathering = smart`）
 
+> ⚠️ **Python 3.12 目标节点兼容性**: Ansible 2.9 自带的 HTTPS 抓取栈在目标节点 Python 3.12+（如 Ubuntu 24.04）上存在 `CustomHTTPSConnection cert_file` 兼容问题，`get_url`、`apt_key url=` 等模块会报错。本项目 docker role 已改用 `curl + gpg keyring` 规避；若在其他 role 中新增 HTTPS 抓取任务，请参考同一做法（详见 CLAUDE.md 1.4 节）
+
 ## 节点规划
 
 | 主机名 | IP 地址 | 角色 | Keepalived Priority |
@@ -308,7 +310,8 @@ vm_swappiness: 0                 # 禁用 swap
 | Nginx PID 路径 | `/run/nginx.pid` | `/run/nginx.pid` | `/run/nginx.pid` |
 | 防火墙工具 | `firewalld` | `firewalld` | `ufw` |
 | EPEL 源 | 需要启用 | 需要启用 | 不适用 |
-| 邮件包名 | `mailx` | `mailx` | `mailutils` |
+| 邮件包名 | `mailx` (heirloom) | `mailx` (heirloom) | `s-nail` |
+| 邮件 SMTP 配置文件 | `/etc/mail.rc` | `/etc/mail.rc` | `/etc/s-nail.rc` |
 | 默认站点配置 | `/etc/nginx/conf.d/default.conf` | `/etc/nginx/conf.d/default.conf` | `/etc/nginx/sites-enabled/default` |
 | Docker CE 仓库 | `centos` | `centos` (兼容) | `ubuntu` |
 | 基础镜像源 | `mirrors.aliyun.com/centos` | `mirrors.aliyun.com/rocky` | `mirrors.aliyun.com/ubuntu` |
@@ -400,6 +403,7 @@ elasticsearch6/
 - 健康检查脚本每 1 秒检测 Nginx 和 ES 状态
 - 失败时自动降低优先级触发 VIP 漂移，权重 -20
 - 支持钉钉 Webhook 和邮件通知切换事件
+- 邮件通知: Ubuntu 使用 `s-nail`、CentOS/Rocky 使用系统自带 `mailx` (heirloom) 发送，SMTP 配置由 Ansible 部署至 `/etc/s-nail.rc` 或 `/etc/mail.rc`，强制 UTF-8 MIME 编码，发送结果记录于 `/var/log/keepalived-notify.log`（注意: Ubuntu 的 GNU mailutils 不支持脚本所需语法，role 会自动改装 s-nail）
 
 ### Elasticsearch 集群容错
 - 三节点集群，`discovery.zen.minimum_master_nodes: 2`，防止脑裂
@@ -428,6 +432,17 @@ elasticsearch6/
 1. 检查 Nginx 自身状态：`curl http://localhost/nginx-health`
 2. 检查后端可达性：`curl http://localhost:9200/_cluster/health`
 3. 查看 Nginx 错误日志：`tail -f /var/log/nginx/es_error.log`
+
+### 邮件通知不发送 / 中文乱码
+1. 查看通知日志定位原因：`tail -20 /var/log/keepalived-notify.log`
+2. 报 `mail: unrecognized option '-S'` → 目标机装的是 GNU mailutils（不支持本脚本的语法），重跑 `ansible-playbook site.yml --tags keepalived` 会自动改装 s-nail
+3. Foxmail 中文乱码 → SMTP 配置缺少 UTF-8 声明，重新部署即可（模板已含 `sendcharsets=utf-8`，主题会自动转 `=?utf-8?B?...?=` 编码字）
+4. 手动测试：`/etc/keepalived/scripts/notify.sh master`，然后查看通知日志确认 `Email sent` 或失败原因
+
+### Docker GPG key 下载失败（Python 3.12 目标节点）
+- 现象：`Failed to download key ... 'CustomHTTPSConnection' object has no attribute 'cert_file'`
+- 根因：Ansible 2.9 自带 urls.py 引用了 Python 3.12 已移除的属性，Ubuntu 24.04 目标节点必现
+- 修复：docker role 已改为 `curl` 下载 + `gpg --dearmor` + `signed-by` keyring（不依赖 Ansible 的 Python HTTPS 栈），重跑即可
 
 ## 维护操作
 

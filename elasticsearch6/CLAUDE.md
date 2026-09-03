@@ -32,15 +32,21 @@
 |--------|---------------------|--------|
 | Nginx 运行用户 | `nginx` | `www-data` |
 | 防火墙工具 | `firewalld` | `ufw` |
-| 邮件包名 | `mailx` | `mailutils` |
+| 邮件包名 | `mailx` (heirloom-mailx) | `s-nail` |
+| 邮件 SMTP 配置文件 | `/etc/mail.rc` | `/etc/s-nail.rc` |
 | Nginx 默认站点路径 | `/etc/nginx/conf.d/default.conf` | `/etc/nginx/sites-enabled/default` |
 
-### 1.3 其他注意事项
+### 1.3 已知兼容性坑（实测踩坑记录）
+
+- **Python 3.12+ 目标节点（Ubuntu 24.04）**: Ansible 2.9 自带 `module_utils/urls.py` 的 `CustomHTTPSConnection` 引用了 Python 3.12 已移除的 `cert_file` 属性，`get_url`、`apt_key url=`、`uri` (https) 等所有 Python 层 HTTPS 抓取均会报 `'CustomHTTPSConnection' object has no attribute 'cert_file'`。规避方式：改用 `shell: curl -fsSL ...` 代替（docker role 的 GPG key 即此方案：curl 下载 + `gpg --dearmor` + `signed-by` keyring）
+- **邮件发送**: Ubuntu 的 GNU mailutils 不支持 `-S` 选项与 `smtp-auth` 系列变量，必须安装 `s-nail`（RedHat 系自带 heirloom mailx 可直接用）；s-nail 新式写法需 `set v15-compat` + `set mta=smtps://user:pass@host:port`（凭据经 urlencode）；必须设置 `sendcharsets=utf-8`，否则 keepalived 的 C locale 环境下中文邮件会乱码；发送结果应写入日志并区分成功/失败
+
+### 1.4 其他注意事项
 
 - Alpine/Arch 等其他发行版不在支持范围，无需考虑
 - `systemd` 在所有目标系统上可用，可直接使用 `systemd` 模块
 - `firewalld` 和 `ufw` 的使用必须用 `ignore_errors: yes`，因为目标系统可能未启用防火墙
-- 涉及 GPG 密钥的仓库配置，建议关闭 gpgcheck（`gpgcheck=0`），避免镜像同步问题
+- 涉及 GPG 密钥的仓库配置，建议关闭 gpgcheck（`gpgcheck=0`），避免镜像同步问题；Ubuntu 24.04 目标节点的 GPG key 下载必须用 curl 方案（见 1.3）
 
 ---
 
