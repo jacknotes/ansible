@@ -6,6 +6,10 @@
 
 set v15-compat
 set from={{ keepalived_email_smtp_user }}
+# 强制邮件正文/主题使用 UTF-8 并自动添加 MIME 头；
+# 不依赖运行环境 LANG（keepalived 调用时默认 C locale，否则 Foxmail 会按 GBK 解码导致中文乱码）
+set ttycharset=utf-8
+set sendcharsets=utf-8
 {% if keepalived_email_smtp_port | int == 465 %}
 # 465 端口为隐式 SSL，必须使用 smtps:// 协议头
 set mta=smtps://{{ keepalived_email_smtp_user | urlencode }}:{{ keepalived_email_smtp_pass | urlencode }}@{{ keepalived_email_smtp_server }}:{{ keepalived_email_smtp_port }}
