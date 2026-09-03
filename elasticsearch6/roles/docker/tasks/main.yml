@@ -132,10 +132,24 @@
           - software-properties-common
         state: present
 
+    # 注意: 不再使用 apt_key url=（其底层走 Ansible 的 Python HTTPS 栈，
+    # 在 Python 3.12+ (Ubuntu 24.04) 上会报
+    # "'CustomHTTPSConnection' object has no attribute 'cert_file'"）
+    # 改用系统 curl 下载 + gpg --dearmor，兼容 Ubuntu 18.04 ~ 24.04
+    - name: Ensure /etc/apt/keyrings directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
     - name: Add Docker official GPG key
-      apt_key:
-        url: https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg
-        state: present
+      shell: |
+        set -o pipefail
+        curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+        chmod 0644 /etc/apt/keyrings/docker.gpg
+      args:
+        executable: /bin/bash
+        creates: /etc/apt/keyrings/docker.gpg
 
     - name: Detect architecture
       command: dpkg --print-architecture
@@ -149,7 +163,7 @@
 
     - name: Add Docker CE APT repository (Aliyun mirror)
       apt_repository:
-        repo: "deb [arch={{ dpkg_arch.stdout }}] https://mirrors.aliyun.com/docker-ce/linux/ubuntu {{ lsb_codename.stdout }} stable"
+        repo: "deb [arch={{ dpkg_arch.stdout }} signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu {{ lsb_codename.stdout }} stable"
         state: present
         filename: docker-ce
 

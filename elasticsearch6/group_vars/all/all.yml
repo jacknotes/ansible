@@ -77,7 +77,7 @@ keepalived_priority_node03: 100
 # 单播模式配置（替代广播，更安全）
 keepalived_unicast: true
 # Keepalived 检测脚本决策变量（默认 auto：按部署时服务运行状态自动判断）
-keepalived_check_nginx: auto   # auto / yes/no（true/false 亦可）
+keepalived_check_nginx: no   # auto / yes/no（true/false 亦可）
 keepalived_check_es: yes      # auto / yes/no（true/false 亦可）
 
 
