@@ -47,18 +47,47 @@ send_email() {
     local subject="[ELK] VIP ${state} - ${HOSTNAME}"
     local body="节点: ${HOSTNAME}\n状态: ${state}\nVIP: ${VIP}\n时间: ${TIMESTAMP}"
 
-    # SMTP 配置在 /etc/s-nail.rc（由 Ansible 部署），GNU mailutils 不支持该配置，需优先选择 s-nail
-    local mailbin
+    # 跨平台选择发送实现:
+    #   s-nail (Debian/Ubuntu)  读取 /etc/s-nail.rc
+    #   heirloom-mailx (CentOS7 的 mailx)  读取 /etc/mail.rc
+    #   GNU mailutils 两者都不支持（无 -S / 无上述配置），需跳过并提示
+    local mailbin base rcfile opts=()
     mailbin="$(command -v s-nail 2>/dev/null || command -v mailx 2>/dev/null || command -v mail 2>/dev/null)"
     if [ -z "$mailbin" ]; then
         log "Email skipped: no mailx implementation found"
         return 1
     fi
+    base="$(basename "$mailbin")"
 
-    if echo -e "$body" | "$mailbin" -s "$subject" -r "{{ keepalived_email_smtp_user }}" "{{ keepalived_email_to }}" >> "$LOG_FILE" 2>&1; then
-        log "Email sent: ${state} (via $(basename "$mailbin"))"
+    if "$mailbin" --version 2>/dev/null | grep -qi "GNU Mailutils"; then
+        log "Email skipped: GNU mailutils 不支持本脚本所需语法，请安装 s-nail (Debian) 或使用系统自带 mailx (CentOS)"
+        return 1
+    fi
+
+    case "$base" in
+        s-nail) rcfile=/etc/s-nail.rc ;;
+        *)      rcfile=/etc/mail.rc ;;
+    esac
+
+    if [ -r "$rcfile" ]; then
+        # SMTP 配置由 Ansible 部署在系统 rc 文件中
+        opts=()
     else
-        log "Email FAILED: ${state} (via $(basename "$mailbin"))"
+        # 无 rc 配置时回退到内联 -S 语法（CentOS7 heirloom-mailx 实测可用）
+        opts=(
+            -S "smtp={{ keepalived_email_smtp_server }}:{{ keepalived_email_smtp_port }}"
+            -S "smtp-auth=login"
+            -S "smtp-auth-user={{ keepalived_email_smtp_user }}"
+            -S "smtp-auth-password={{ keepalived_email_smtp_pass }}"
+            -S "ssl-verify=ignore"
+            -S "sendcharsets=utf-8"
+        )
+    fi
+
+    if echo -e "$body" | "$mailbin" "${opts[@]}" -s "$subject" -r "{{ keepalived_email_smtp_user }}" "{{ keepalived_email_to }}" >> "$LOG_FILE" 2>&1; then
+        log "Email sent: ${state} (via ${base})"
+    else
+        log "Email FAILED: ${state} (via ${base})"
     fi
 }
 {% endif %}

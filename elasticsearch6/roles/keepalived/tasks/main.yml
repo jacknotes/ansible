@@ -117,10 +117,11 @@
     mode: '0755'
   when: (keepalived_dingtalk_enabled | default(false)) or (keepalived_email_enabled | default(false))
 
-- name: Deploy s-nail SMTP configuration (/etc/s-nail.rc)
+- name: Deploy mailx SMTP configuration
+  # RedHat (heirloom-mailx) → /etc/mail.rc；Debian (s-nail) → /etc/s-nail.rc
   template:
     src: mailrc.j2
-    dest: /etc/s-nail.rc
+    dest: "{{ '/etc/mail.rc' if ansible_os_family == 'RedHat' else '/etc/s-nail.rc' }}"
     owner: root
     group: root
     mode: '0600'
