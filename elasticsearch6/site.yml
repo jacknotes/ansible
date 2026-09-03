@@ -1,0 +1,205 @@
+---
+# ELK Cluster Deployment Playbook
+# 用于自动化部署三节点 Elasticsearch + Kibana + Nginx + Keepalived 高可用集群
+#
+# 支持操作系统: CentOS 7/8, RockyLinux 8/9, Ubuntu 18.04/20.04/22.04/24.04/26.04
+#
+# 独立部署说明:
+#   - 单独部署Nginx:  ansible-playbook site.yml --tags nginx
+#   - 单独部署Keepalived: ansible-playbook site.yml --tags keepalived
+#   - 仅部署Docker:  ansible-playbook site.yml --tags docker
+#   - 仅部署ES:  ansible-playbook site.yml --tags elasticsearch
+#   - 仅部署Kibana: ansible-playbook site.yml --tags kibana
+#   - 仅更新Kibana使用VIP: ansible-playbook site.yml --tags kibana-vip
+#
+# 前提条件:
+#   - 目标机器必须支持 systemd (CentOS 7+, RockyLinux 8+, Ubuntu 16.04+)
+#   - 控制端需要 Python 2.7+ 或 3.5+
+#   - 必须配置 facts 收集 (gather_facts: yes)
+
+- name: Pre-flight check - verify OS compatibility
+  hosts: all
+  gather_facts: yes
+  tags: always
+  tasks:
+    - name: Verify supported OS
+      assert:
+        that:
+          - ansible_os_family in ["RedHat", "Debian"]
+          - >
+            (ansible_os_family == "RedHat" and ansible_distribution_major_version | int >= 7 and
+             ansible_distribution in ["CentOS", "Rocky", "RedHat", "OracleLinux", "AlmaLinux", "Amazon"]) or
+            (ansible_os_family == "Debian" and ansible_distribution == "Ubuntu" and ansible_distribution_major_version | int >= 18 and ansible_distribution_major_version | int <= 26)
+        fail_msg: "Unsupported OS. This playbook supports CentOS 7/8, RockyLinux 8/9 and Ubuntu 18.04/20.04/22.04/24.04/26.04 only. Detected: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+        success_msg: "OS check passed: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      run_once: true
+
+# Play 1: 所有节点基础配置和 Docker 安装
+- name: Install Docker on all nodes
+  hosts: elk_nodes
+  gather_facts: yes
+  become: yes
+  roles:
+    - docker
+  tags:
+    - docker
+
+# Play 2: 部署 Elasticsearch 集群
+- name: Deploy Elasticsearch cluster
+  hosts: elasticsearch
+  gather_facts: yes
+  become: yes
+  roles:
+    - role: elasticsearch
+  tags:
+    - elasticsearch
+
+# Play 3: 部署 Kibana（所有节点）
+- name: Deploy Kibana
+  hosts: kibana
+  gather_facts: yes
+  become: yes
+  roles:
+    - role: kibana
+  tags:
+    - kibana
+
+# Play 4: 部署 Nginx 负载均衡
+- name: Deploy Nginx load balancer
+  hosts: nginx_nodes
+  gather_facts: yes
+  become: yes
+  roles:
+    - nginx
+  tags:
+    - nginx
+
+# Play 5: 部署 Keepalived VIP
+- name: Deploy Keepalived for VIP
+  hosts: nginx_nodes
+  gather_facts: yes
+  become: yes
+  roles:
+    - keepalived
+  tags:
+    - keepalived
+
+# Play 5.1: 更新 Kibana 配置使用 VIP 并轮询重启
+- name: Update Kibana config to use VIP and rolling restart
+  hosts: kibana
+  gather_facts: yes
+  become: yes
+  serial: 1
+  tasks:
+    - name: Update Kibana config to use VIP
+      replace:
+        path: "{{ deploy_dir }}/kibana.yml"
+        regexp: 'http://\d+\.\d+\.\d+\.\d+:{{ es_http_port }}'
+        replace: "http://{{ keepalived_virtual_ip.split('/')[0] }}:{{ es_http_port }}"
+      when: not ansible_check_mode
+      tags: [kibana-vip]
+
+    - name: Restart Kibana container
+      shell: docker restart kibana
+      when: not ansible_check_mode
+      tags: [kibana-vip]
+
+    - name: Wait for Kibana to be ready
+      uri:
+        url: "http://localhost:{{ kibana_port }}/api/status"
+        method: GET
+        return_content: yes
+        status_code: 200
+      register: kibana_status
+      until: kibana_status is defined and kibana_status.status is defined and kibana_status.status == 200
+      retries: 30
+      delay: 10
+      when: not ansible_check_mode
+      tags: [kibana-vip]
+
+    - name: Display Kibana status
+      debug:
+        msg: "Kibana on {{ inventory_hostname }} is ready with VIP"
+      when: kibana_status is defined and kibana_status.status is defined
+      tags: [kibana-vip]
+  tags:
+    - kibana-vip
+
+# Play 6: 验证集群状态
+- name: Verify ELK cluster status
+  hosts: elasticsearch
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Check Elasticsearch cluster health
+      uri:
+        url: "http://localhost:{{ es_http_port }}/_cluster/health"
+        method: GET
+        return_content: yes
+      register: cluster_health
+      until: cluster_health is defined and cluster_health.json is defined and (cluster_health.json.status == "green" or cluster_health.json.status == "yellow")
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+      when: not ansible_check_mode
+      tags: [verify]
+
+    - name: Display cluster health
+      debug:
+        msg: "Cluster: {{ cluster_health.json.cluster_name }}, Status: {{ cluster_health.json.status }}, Nodes: {{ cluster_health.json.number_of_nodes }}"
+      when: cluster_health is defined and cluster_health.json is defined
+      tags: [verify]
+
+    - name: List cluster nodes
+      uri:
+        url: "http://localhost:{{ es_http_port }}/_cat/nodes?v"
+        method: GET
+        return_content: yes
+      register: nodes_list
+      when: not ansible_check_mode
+      tags: [verify]
+
+    - name: Show cluster nodes
+      debug:
+        msg: "{{ nodes_list.content }}"
+      when: nodes_list is defined and nodes_list.content is defined
+      tags: [verify]
+
+# Play 7: 验证 Nginx 和 VIP 状态
+- name: Verify Nginx and VIP status
+  hosts: nginx_nodes
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Check Nginx service status
+      systemd:
+        name: nginx
+      register: nginx_status
+      tags: [verify]
+
+    - name: Display Nginx status
+      debug:
+        msg: "Nginx is {{ 'running' if nginx_status.status.ActiveState == 'active' else 'not running' }}"
+      tags: [verify]
+
+    - name: Check Keepalived service status
+      systemd:
+        name: keepalived
+      register: keepalived_status
+      tags: [verify]
+
+    - name: Display Keepalived status
+      debug:
+        msg: "Keepalived is {{ 'running' if keepalived_status.status.ActiveState == 'active' else 'not running' }}"
+      tags: [verify]
+
+    - name: Check VIP assignment
+      shell: ip addr show {{ keepalived_interface }} | grep {{ keepalived_virtual_ip.split('/')[0] }}
+      register: vip_check
+      ignore_errors: yes
+      tags: [verify]
+
+    - name: Display VIP status
+      debug:
+        msg: "VIP {{ keepalived_virtual_ip.split('/')[0] }} is {{ 'assigned' if vip_check.rc == 0 else 'not assigned' }} to {{ inventory_hostname }}"
+      tags: [verify]

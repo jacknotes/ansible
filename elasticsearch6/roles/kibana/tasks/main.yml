@@ -1,0 +1,64 @@
+# Kibana Deployment Tasks
+
+- name: Create Kibana data directory
+  file:
+    path: "{{ deploy_dir }}/kibana-data/{{ inventory_hostname }}"
+    state: directory
+    mode: '0777'
+
+- name: Create Kibana logs directory
+  file:
+    path: "{{ deploy_dir }}/kibana-logs/{{ inventory_hostname }}"
+    state: directory
+    mode: '0777'
+
+- name: Generate docker-compose file for Kibana
+  template:
+    src: docker-compose-kibana.yml.j2
+    dest: "{{ deploy_dir }}/docker-compose-kibana.yml"
+    mode: '0644'
+  register: compose_file
+
+- name: Generate Kibana config file
+  template:
+    src: kibana.yml.j2
+    dest: "{{ deploy_dir }}/kibana.yml"
+    mode: '0644'
+
+- name: Wait for Elasticsearch to be ready before starting Kibana
+  uri:
+    url: "http://{{ hostvars[groups['elasticsearch'][0]].ansible_host }}:{{ es_http_port }}/_cluster/health"
+    method: GET
+    return_content: yes
+    status_code: 200
+  register: es_health
+  until: es_health is defined and es_health.status is defined and es_health.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: yes
+  when: not ansible_check_mode
+
+- name: Start Kibana container
+  shell: docker-compose -f docker-compose-kibana.yml up -d
+  args:
+    chdir: "{{ deploy_dir }}"
+  register: kibana_container
+  when: not ansible_check_mode
+
+- name: Wait for Kibana to be ready
+  uri:
+    url: "http://localhost:{{ kibana_port }}/api/status"
+    method: GET
+    return_content: yes
+    status_code: 200
+  register: kibana_status
+  until: kibana_status is defined and kibana_status.status is defined and kibana_status.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: yes
+  when: not ansible_check_mode
+
+- name: Display Kibana status
+  debug:
+    msg: "Kibana is ready at http://{{ ansible_host }}:{{ kibana_port }}"
+  when: kibana_status is defined and kibana_status.status is defined

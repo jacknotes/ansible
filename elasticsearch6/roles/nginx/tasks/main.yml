@@ -1,0 +1,130 @@
+# Nginx Installation and Configuration Tasks - Cross Platform (CentOS / RockyLinux / Ubuntu)
+# 支持 CentOS 7/8, RockyLinux 8/9, Ubuntu 18.04/20.04/22.04/24.04/26.04
+
+- name: Load OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+    - "default.yml"
+  tags: always
+
+# ========================
+# CentOS / RockyLinux / RHEL 安装流程
+# ========================
+- block:
+    - name: Install EPEL release (RHEL family)
+      package:
+        name: epel-release
+        state: present
+      ignore_errors: yes
+
+    - name: Install Nginx (RHEL family)
+      package:
+        name: nginx
+        state: present
+
+    - name: Ensure nginx config directory exists
+      file:
+        path: /etc/nginx/conf.d
+        state: directory
+        mode: '0755'
+
+    - name: Configure firewall for HTTP (RHEL family)
+      firewalld:
+        port: "{{ nginx_listen_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      ignore_errors: yes
+
+  when: ansible_os_family == "RedHat"
+
+# ========================
+# Ubuntu 安装流程
+# ========================
+- block:
+    - name: Update apt cache (Ubuntu)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisites (Ubuntu)
+      apt:
+        name:
+          - curl
+          - lsb-release
+        state: present
+
+    - name: Install Nginx (Ubuntu)
+      apt:
+        name: nginx
+        state: present
+
+    - name: Ensure nginx user exists (Ubuntu)
+      user:
+        name: www-data
+        state: present
+      ignore_errors: yes
+
+    - name: Ensure nginx config directory exists
+      file:
+        path: /etc/nginx/conf.d
+        state: directory
+        mode: '0755'
+
+    - name: Configure firewall for HTTP (Ubuntu)
+      ufw:
+        rule: allow
+        port: "{{ nginx_listen_port }}"
+        proto: tcp
+      ignore_errors: yes
+
+  when: ansible_os_family == "Debian"
+
+# ========================
+# 通用配置（CentOS / Ubuntu 共用）
+# ========================
+- name: Deploy Nginx main configuration
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify: restart nginx
+
+- name: Deploy upstream configuration
+  template:
+    src: upstream.conf.j2
+    dest: "{{ nginx_conf_d_path }}/upstream.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart nginx
+
+- name: Remove default Nginx configuration
+  file:
+    path: "{{ nginx_default_conf_path }}"
+    state: absent
+  notify: restart nginx
+
+- name: Test Nginx configuration
+  command: nginx -t
+  register: nginx_test
+  changed_when: false
+  ignore_errors: yes
+
+- name: Display Nginx test results
+  debug:
+    msg: "{{ nginx_test.stderr | default(nginx_test.stdout) }}"
+  when: nginx_test is defined and (nginx_test.rc is defined and nginx_test.rc != 0)
+
+- name: Start and enable Nginx service
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+  when: not ansible_check_mode

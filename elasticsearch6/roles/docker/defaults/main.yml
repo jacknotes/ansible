@@ -1,0 +1,19 @@
+---
+# Default variables for docker role
+# These can be overridden in group_vars or host_vars
+
+# Docker镜像（默认使用公共镜像，内部私有仓库请在 secrets.yml 中覆盖）
+elk_image: sebp/elk:651
+
+# 系统配置
+vm_max_map_count: 262144
+vm_swappiness: 0
+nofile_soft: 655360
+nofile_hard: 655360
+
+# Docker insecure-registries（内网 HTTP 仓库，请根据实际环境在 secrets.yml 中配置）
+# 格式: "http://IP:端口" 或 "http://域名"
+docker_insecure_registries: []
+# 示例（取消注释并替换为真实地址）:
+# docker_insecure_registries:
+#   - "http://your-harbor-ip:port"

@@ -1,0 +1,94 @@
+# ELK Cluster Global Variables
+
+# Docker镜像配置
+# 注意：sebp/elk:651 是第三方镜像，在中国可能拉取缓慢
+# 方案1：使用镜像加速器（已在docker daemon.json中配置）
+# 方案2：使用阿里云私有镜像仓库（推荐）
+# 方案3：使用官方分离镜像（elasticsearch + kibana）
+
+# 使用sebp/elk集成镜像（公共镜像）
+# 如需使用内部私有仓库镜像，请在 secrets.yml 中覆盖 elk_image 变量
+elk_image: sebp/elk:651
+
+# 或者使用官方分离镜像（取消注释以下配置）
+# es_image: docker.elastic.co/elasticsearch/elasticsearch:6.8.23
+# kibana_image: docker.elastic.co/kibana/kibana:6.8.23
+
+# 阿里云私有镜像仓库配置（如果需要推送到私有仓库）
+# aliyun_registry: registry.cn-hangzhou.aliyuncs.com
+# aliyun_namespace: your_namespace
+
+# 集群配置
+cluster_name: eslog-cluster
+
+# Elasticsearch配置
+es_heap_size: 8192m
+es_http_port: 9200
+es_transport_port: 9300
+es_memory_limit: 16g
+es_snapshot_repo_path: /opt/eslog-cluster/es-snapshots
+
+# 时区配置
+timezone: Asia/Shanghai
+
+# Kibana配置
+kibana_port: 5601
+kibana_memory_limit: 1024m
+
+# 部署目录
+deploy_dir: /opt/eslog-cluster
+
+# Elasticsearch发现节点列表（所有ES节点IP，逗号分隔）
+es_discovery_hosts: >-
+  {{ groups['elasticsearch'] | map('extract', hostvars, 'ansible_host') | join(',') }}
+
+# Docker镜像加速器配置
+docker_registry_mirrors:
+  - https://registry.cn-hangzhou.aliyuncs.com
+  - https://docker.mirrors.ustc.edu.cn
+  - https://hub-mirror.c.163.com
+
+# 系统配置
+vm_max_map_count: 262144
+vm_swappiness: 0
+
+# 文件描述符限制
+nofile_soft: 655360
+nofile_hard: 655360
+
+# ===========================================
+# Nginx 负载均衡配置
+# ===========================================
+nginx_listen_port: 80
+es_domain: es.example.com
+kibana_domain: kibana.example.com
+
+# ===========================================
+# Keepalived VIP 配置
+# ===========================================
+keepalived_virtual_ip: 10.0.0.100/24   # 替换为你的实际 VIP 地址
+keepalived_interface: eth0
+keepalived_virtual_router_id: 170
+# keepalived_auth_pass 定义在 secrets.yml
+keepalived_priority_node01: 80
+keepalived_priority_node02: 90
+keepalived_priority_node03: 100
+
+# 单播模式配置（替代广播，更安全）
+keepalived_unicast: true
+
+# ===========================================
+# Keepalived 通知配置（均为可选，独立控制）
+# ===========================================
+
+# 钉钉 Webhook 通知
+# keepalived_dingtalk_webhook 定义在 secrets.yml
+keepalived_dingtalk_enabled: true
+
+# 邮件通知
+# keepalived_email_to、keepalived_email_smtp_pass、keepalived_email_smtp_user 定义在 secrets.yml
+keepalived_email_enabled: false
+keepalived_email_to: "admin@example.com"      # 覆盖: keepalived_email_to in secrets.yml
+keepalived_email_smtp_server: "smtp.example.com"  # 覆盖: keepalived_email_smtp_server in secrets.yml
+keepalived_email_smtp_port: 465
+keepalived_email_smtp_user: "alert@example.com"   # 覆盖: keepalived_email_smtp_user in secrets.yml

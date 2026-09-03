@@ -1,0 +1,70 @@
+# Elasticsearch Deployment Tasks
+
+- name: Create deployment directory
+  file:
+    path: "{{ deploy_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Create Elasticsearch data directory
+  file:
+    path: "{{ deploy_dir }}/es-data/{{ inventory_hostname }}"
+    state: directory
+    mode: '0777'
+
+- name: Create Elasticsearch logs directory
+  file:
+    path: "{{ deploy_dir }}/es-logs/{{ inventory_hostname }}"
+    state: directory
+    mode: '0777'
+
+- name: Create Elasticsearch snapshot directory
+  file:
+    path: "{{ es_snapshot_repo_path }}"
+    state: directory
+    mode: '0777'
+
+- name: Generate docker-compose file for Elasticsearch
+  template:
+    src: docker-compose-es.yml.j2
+    dest: "{{ deploy_dir }}/docker-compose-es.yml"
+    mode: '0644'
+  register: compose_file
+
+- name: Generate Elasticsearch config file
+  template:
+    src: elasticsearch.yml.j2
+    dest: "{{ deploy_dir }}/elasticsearch.yml"
+    mode: '0644'
+
+- name: Stop and remove existing Elasticsearch container
+  shell: docker-compose -f docker-compose-es.yml down
+  args:
+    chdir: "{{ deploy_dir }}"
+  ignore_errors: yes
+  when: not ansible_check_mode
+
+- name: Start Elasticsearch container
+  shell: docker-compose -f docker-compose-es.yml up -d
+  args:
+    chdir: "{{ deploy_dir }}"
+  register: es_container
+  when: not ansible_check_mode
+
+- name: Wait for Elasticsearch to be ready
+  uri:
+    url: "http://localhost:{{ es_http_port }}/_cluster/health"
+    method: GET
+    return_content: yes
+    status_code: 200
+  register: es_health
+  until: es_health is defined and es_health.status is defined and es_health.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: yes
+  when: not ansible_check_mode
+
+- name: Display Elasticsearch health
+  debug:
+    msg: "Elasticsearch cluster health: {{ es_health.json.status }}"
+  when: es_health is defined and es_health.json is defined

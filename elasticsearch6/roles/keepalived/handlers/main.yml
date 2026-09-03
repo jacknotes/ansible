@@ -1,0 +1,14 @@
+---
+# Keepalived Handlers
+
+- name: restart keepalived
+  systemd:
+    name: keepalived
+    state: restarted
+  when: not ansible_check_mode
+
+- name: reload keepalived
+  systemd:
+    name: keepalived
+    state: reloaded
+  when: not ansible_check_mode

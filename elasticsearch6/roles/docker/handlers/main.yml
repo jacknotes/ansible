@@ -1,0 +1,7 @@
+# Docker Handlers
+
+- name: restart docker
+  systemd:
+    name: docker
+    state: restarted
+  when: not ansible_check_mode

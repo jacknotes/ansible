@@ -1,0 +1,25 @@
+---
+# OS-specific variables for RedHat/CentOS family
+# 默认: CentOS 7 配置
+
+# 包管理器配置
+pkg_mgr: yum
+
+# 基础仓库配置 - 使用变量动态确定基础URL
+os_repo_base_url: "http://mirrors.aliyun.com/centos"
+docker_repo_host: "https://mirrors.aliyun.com/docker-ce/linux/centos"
+
+# GPK 检查: CentOS 基础仓库和 EPEL 仓库用于安装系统包(nginx/keepalived 依赖)
+# Docker CE 本身的 GPG 检查由 docker-ce.repo 文件内部控制
+gpgcheck_base: "0"
+gpgcheck_epel: "0"
+
+# EPEL 配置
+docker_epel_repo_base_url: "http://mirrors.aliyun.com/epel/{{ ansible_distribution_major_version }}/$basearch"
+
+# Docker 包
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin

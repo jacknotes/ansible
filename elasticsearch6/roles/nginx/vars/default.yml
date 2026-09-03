@@ -1,0 +1,6 @@
+---
+# Default fallback variables
+nginx_user: nginx
+nginx_pid: /run/nginx.pid
+nginx_conf_d_path: /etc/nginx/conf.d
+nginx_default_conf_path: /etc/nginx/conf.d/default.conf

@@ -1,0 +1,16 @@
+---
+# Default variables for kibana role
+
+# Kibana 配置
+kibana_port: 5601
+kibana_memory_limit: 1024m
+elk_image: sebp/elk:651
+
+# Elasticsearch 连接
+es_http_port: 9200
+
+# 部署目录
+deploy_dir: /opt/eslog-cluster
+
+# 时区
+timezone: Asia/Shanghai

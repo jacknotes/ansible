@@ -1,0 +1,62 @@
+# =============================================================================
+# .gitignore for Ansible Elasticsearch6 Project
+# 防止敏感信息（密码、密钥、私钥等）被提交到 Git 仓库
+# =============================================================================
+
+# ===== 内部/规划文档（含真实IP/密码） =====
+IMPLEMENTATION_PLAN.md
+
+# ===== 敏感数据文件 =====
+# 包含真实密码/密钥的文件（使用 .example 模板替代）
+inventory.ini
+group_vars/all/secrets.yml
+host_vars/**/secrets.yml
+
+# ===== 密钥和证书 =====
+# SSH 密钥
+*.pem
+*.key
+*.pub
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# SSL/TLS 证书
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# ===== Ansible Vault 加密文件（如有） =====
+*.vault
+vault_password
+
+# ===== 环境/临时文件 =====
+# 缓存的 facts（可能包含敏感系统信息）
+/tmp/ansible_facts/
+*.retry
+
+# 备份文件
+*.bak
+*~
+*.swp
+*.swo
+
+# ===== Python 缓存 =====
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# ===== IDE / 编辑器配置 =====
+.vscode/
+.idea/
+*.iml
+
+# ===== 日志和测试报告 =====
+*.log
+
+# ===== 操作系统生成文件 =====
+Thumbs.db
+.DS_Store

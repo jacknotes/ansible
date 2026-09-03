@@ -1,0 +1,113 @@
+# Keepalived Installation and Configuration Tasks - Cross Platform (CentOS / RockyLinux / Ubuntu)
+# 支持 CentOS 7/8, RockyLinux 8/9, Ubuntu 18.04/20.04/22.04/24.04/26.04
+
+- name: Load OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+    - "default.yml"
+  tags: always
+
+<longcat_arg_value>
+
+- block:
+    - name: Install Keepalived (RHEL family)
+      package:
+        name: keepalived
+        state: present
+
+    - name: Install mailx for email notifications (RHEL family)
+      package:
+        name: mailx
+        state: present
+      when: keepalived_email_enabled | default(false)
+
+    - name: Configure firewall for VRRP (RHEL family)
+      firewalld:
+        protocol: vrrp
+        permanent: yes
+        state: enabled
+        immediate: yes
+      ignore_errors: yes
+
+  when: ansible_os_family == "RedHat"
+
+# ========================
+# Ubuntu 安装流程 (18.04/20.04/22.04/24.04/26.04)
+# ========================
+- block:
+    - name: Update apt cache (Ubuntu)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Keepalived (Ubuntu)
+      apt:
+        name: keepalived
+        state: present
+
+    - name: Install mailutils for email notifications (Ubuntu)
+      apt:
+        name: mailutils
+        state: present
+      when: keepalived_email_enabled | default(false)
+
+    - name: Configure firewall for VRRP (Ubuntu)
+      ufw:
+        rule: allow
+        proto: 112
+      ignore_errors: yes
+
+  when: ansible_os_family == "Debian"
+
+# ========================
+# 通用配置（CentOS / Ubuntu 共用）
+# ========================
+- name: Create Keepalived check script directory
+  file:
+    path: /etc/keepalived/scripts
+    state: directory
+    mode: '0755'
+
+- name: Create Keepalived log file
+  file:
+    path: /var/log/keepalived-notify.log
+    state: touch
+    mode: '0644'
+  when: (keepalived_dingtalk_enabled | default(false)) or (keepalived_email_enabled | default(false))
+
+- name: Deploy health check script (Nginx + Elasticsearch)
+  template:
+    src: check_services.sh.j2
+    dest: /etc/keepalived/scripts/check_services.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy notification script
+  template:
+    src: notify.sh.j2
+    dest: /etc/keepalived/scripts/notify.sh
+    owner: root
+    group: root
+    mode: '0755'
+  when: (keepalived_dingtalk_enabled | default(false)) or (keepalived_email_enabled | default(false))
+
+- name: Deploy Keepalived configuration
+  template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  notify: restart keepalived
+
+- name: Start and enable Keepalived service
+  systemd:
+    name: keepalived
+    state: started
+    enabled: yes
+  when: not ansible_check_mode

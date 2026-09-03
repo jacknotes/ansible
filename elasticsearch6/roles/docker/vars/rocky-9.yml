@@ -1,0 +1,23 @@
+---
+# OS-specific variables for RockyLinux 9
+pkg_mgr: dnf
+
+# RockyLinux 特有仓库路径 (使用阿里云镜像)
+os_repo_base_url: "https://mirrors.aliyun.com/rocky"
+
+# Docker CE 仓库: Rocky 与 CentOS 二进制兼容,使用 CentOS 仓库
+docker_repo_host: "https://mirrors.aliyun.com/docker-ce/linux/centos"
+
+# GPG 检查关闭 (系统包 GPG 密钥镜像不一定同步,避免失败)
+gpgcheck_base: "0"
+gpgcheck_epel: "0"
+
+# EPEL 9 (Rocky 9 需要先启用 crb)
+docker_epel_repo_base_url: "http://mirrors.aliyun.com/epel/9/$basearch"
+
+# Docker 包
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin

@@ -1,0 +1,26 @@
+# ELK Cluster Inventory Example
+# 复制此文件为 inventory.ini 并修改为实际值:
+#   cp inventory.ini.example inventory.ini
+#
+# inventory.ini 已被 .gitignore 排除，不会提交到仓库
+
+[elk_nodes]
+# 请替换为实际节点 IP 和 SSH 用户名
+node01 ansible_host=10.0.0.1 ansible_user=root
+node02 ansible_host=10.0.0.2 ansible_user=root
+node03 ansible_host=10.0.0.3 ansible_user=root
+
+[elasticsearch]
+node01
+node02
+node03
+
+[kibana]
+node01
+node02
+node03
+
+[nginx_nodes]
+node01
+node02
+node03

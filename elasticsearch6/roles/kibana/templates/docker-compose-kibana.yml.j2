@@ -1,0 +1,31 @@
+# Kibana Docker Compose Template
+version: "3.8"
+
+services:
+  kibana:
+    image: {{ elk_image }}
+    container_name: kibana
+    hostname: kibana
+    environment:
+      - ELASTICSEARCH_START=0
+      - LOGSTASH_START=0
+      - KIBANA_START=1
+      - KIBANA_CONNECT_RETRY=180
+    volumes:
+      - {{ deploy_dir }}/kibana-data:/var/lib/kibana
+      - {{ deploy_dir }}/kibana-logs:/var/log/kibana
+      - {{ deploy_dir }}/kibana.yml:/opt/kibana/config/kibana.yml
+    ports:
+      - "{{ kibana_port }}:5601"
+    networks:
+      - elk-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q '\"state\":\"green\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  elk-network:
+    driver: bridge

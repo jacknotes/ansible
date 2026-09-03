@@ -1,0 +1,13 @@
+---
+# Default fallback variables (最保守配置)
+pkg_mgr: yum
+gpgcheck_base: "0"
+gpgcheck_epel: "0"
+docker_repo_host: "https://download.docker.com/linux/centos"
+os_repo_base_url: "http://mirrors.aliyun.com/centos"
+docker_epel_repo_base_url: "http://mirrors.aliyun.com/epel/$basearch"
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin

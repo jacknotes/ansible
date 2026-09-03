@@ -1,0 +1,56 @@
+# =============================================================================
+# Root .gitignore for Monorepo
+# 各子项目的敏感文件在各自目录的 .gitignore 中管理
+# 此处仅包含跨项目的通用排除规则
+# =============================================================================
+
+# ===== 敏感数据文件 =====
+# 每个子项目自己的 inventory.ini / secrets.yml 在各自 .gitignore 中排除
+# 此处作兜底保护
+**/inventory.ini
+**/secrets.yml
+**/secrets.yml
+group_vars/all/secrets.yml
+
+# ===== 内部/规划文档 =====
+**/IMPLEMENTATION_PLAN.md
+
+# ===== 密钥和证书 =====
+*.pem
+*.key
+*.pub
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# ===== Ansible =====
+*.retry
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# ===== IDE / 编辑器 =====
+.vscode/
+.idea/
+*.iml
+
+# ===== 日志 =====
+*.log
+
+# ===== 操作系统 =====
+Thumbs.db
+.DS_Store
+
+# ===== 备份 =====
+*.bak
+*~
+*.swp
+*.swo

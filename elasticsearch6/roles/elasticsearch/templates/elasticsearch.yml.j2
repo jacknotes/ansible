@@ -1,0 +1,30 @@
+# Elasticsearch Configuration
+# Managed by Ansible - Do not edit manually
+
+cluster.name: {{ cluster_name }}
+node.name: {{ inventory_hostname }}
+
+network.host: 0.0.0.0
+network.publish_host: {{ ansible_host }}
+http.port: 9200
+transport.tcp.port: 9300
+
+discovery.zen.ping.unicast.hosts: {% for host in groups['elasticsearch'] %}{{ hostvars[host].ansible_host }}:{{ es_transport_port }}{% if not loop.last %},{% endif %}{% endfor %}
+
+discovery.zen.minimum_master_nodes: {{ (groups['elasticsearch'] | length / 2 + 1) | int }}
+
+discovery.zen.ping_timeout: 5s
+discovery.zen.fd.ping_timeout: 5s
+discovery.zen.fd.ping_retries: 2
+discovery.zen.join_timeout: 10s
+discovery.zen.master_election.wait_for_joins_timeout: 10s
+
+gateway.recover_after_nodes: 2
+gateway.recover_after_time: 5s
+gateway.expected_nodes: 3
+
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+path.repo: /snapshots
+
+bootstrap.memory_lock: true

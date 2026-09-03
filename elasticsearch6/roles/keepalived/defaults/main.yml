@@ -1,0 +1,23 @@
+---
+# Default variables for keepalived role
+
+# VIP 配置
+keepalived_virtual_ip: 10.0.0.100/24
+keepalived_interface: eth0
+keepalived_virtual_router_id: 170
+keepalived_priority_node01: 80
+keepalived_priority_node02: 90
+keepalived_priority_node03: 100
+
+# 单播模式配置
+keepalived_unicast: true
+
+# 通知配置
+keepalived_dingtalk_enabled: false
+keepalived_dingtalk_webhook: ""
+keepalived_email_enabled: false
+keepalived_email_to: "admin@example.com"
+keepalived_email_smtp_server: "smtp.example.com"
+keepalived_email_smtp_port: 465
+keepalived_email_smtp_user: "alert@example.com"
+# keepalived_email_smtp_pass 应定义在 secrets.yml 或使用 ansible-vault 加密

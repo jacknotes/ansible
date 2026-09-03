@@ -1,0 +1,10 @@
+# Kibana Configuration
+# Managed by Ansible - Do not edit manually
+
+server.host: "0.0.0.0"
+server.port: 5601
+
+elasticsearch.url: "http://{{ hostvars[groups['elasticsearch'][0]].ansible_host }}:{{ es_http_port }}"
+elasticsearch.requestTimeout: 120000
+
+logging.dest: /var/log/kibana/kibana.log

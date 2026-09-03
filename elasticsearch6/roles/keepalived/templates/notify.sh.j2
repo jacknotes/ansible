@@ -1,0 +1,65 @@
+#!/bin/bash
+# Keepalived 状态变更通知脚本
+# Managed by Ansible - Do not edit manually
+
+STATE=$1
+HOSTNAME=$(hostname)
+VIP="{{ keepalived_virtual_ip.split('/')[0] }}"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+LOG_FILE="/var/log/keepalived-notify.log"
+
+log() {
+    echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
+}
+
+{% if keepalived_dingtalk_enabled | default(false) %}
+send_dingtalk() {
+    local state=$1
+    local title=""
+    local content=""
+    
+    case "$state" in
+        master)
+            title="VIP 切换告警"
+            content="**节点**: ${HOSTNAME}\n**状态**: MASTER\n**VIP**: ${VIP}\n**时间**: ${TIMESTAMP}"
+            ;;
+        backup)
+            title="VIP 状态变更"
+            content="**节点**: ${HOSTNAME}\n**状态**: BACKUP\n**VIP**: ${VIP}\n**时间**: ${TIMESTAMP}"
+            ;;
+        fault)
+            title="VIP 故障告警"
+            content="**节点**: ${HOSTNAME}\n**状态**: FAULT\n**VIP**: ${VIP}\n**时间**: ${TIMESTAMP}"
+            ;;
+    esac
+    
+    curl -s -X POST "{{ keepalived_dingtalk_webhook }}" \
+        -H 'Content-Type: application/json' \
+        -d "{\"msgtype\":\"markdown\",\"markdown\":{\"title\":\"${title}\",\"text\":\"## ${title}\n\n${content}\"}}" >> "$LOG_FILE" 2>&1
+    
+    log "Dingtalk sent: ${state}"
+}
+{% endif %}
+
+{% if keepalived_email_enabled | default(false) %}
+send_email() {
+    local state=$1
+    local subject="[ELK] VIP ${state} - ${HOSTNAME}"
+    local body="节点: ${HOSTNAME}\n状态: ${state}\nVIP: ${VIP}\n时间: ${TIMESTAMP}"
+    
+    echo -e "$body" | mail -s "$subject" -S smtp="{{ keepalived_email_smtp_server }}:{{ keepalived_email_smtp_port }}" "{{ keepalived_email_to }}"
+    log "Email sent: ${state}"
+}
+{% endif %}
+
+log "State change: ${STATE}"
+
+{% if keepalived_dingtalk_enabled | default(false) %}
+send_dingtalk "$STATE"
+{% endif %}
+
+{% if keepalived_email_enabled | default(false) %}
+send_email "$STATE"
+{% endif %}
+
+exit 0

@@ -1,0 +1,297 @@
+# Docker Installation Tasks - Cross Platform (CentOS / RockyLinux / Ubuntu)
+# 支持 CentOS 7, RockyLinux 8/9, Ubuntu 18.04/20.04/22.04/24.04/26.04
+
+- name: Load OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+    - "default.yml"
+  tags: always
+
+# ========================
+# CentOS / RockyLinux / RHEL 通用安装流程
+# ========================
+- block:
+    - name: Backup existing repo files (RHEL family)
+      shell: |
+        mkdir -p /etc/yum.repos.d/backup
+        mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/backup/ 2>/dev/null || true
+      args:
+        creates: /etc/yum.repos.d/backup
+
+    - name: Configure Alibaba Cloud Base/OS repo
+      copy:
+        dest: "/etc/yum.repos.d/{{ ansible_distribution }}-Base.repo"
+        content: |
+          # {{ ansible_distribution }} Base repo
+          [base]
+          name={{ ansible_distribution }}-$releasever - Base - mirrors.aliyun.com
+          baseurl={{ os_repo_base_url }}/$releasever/os/$basearch/
+          gpgcheck={{ gpgcheck_base }}
+
+          [updates]
+          name={{ ansible_distribution }}-$releasever - Updates - mirrors.aliyun.com
+          baseurl={{ os_repo_base_url }}/$releasever/updates/$basearch/
+          gpgcheck={{ gpgcheck_base }}
+
+          [extras]
+          name={{ ansible_distribution }}-$releasever - Extras - mirrors.aliyun.com
+          baseurl={{ os_repo_base_url }}/$releasever/extras/$basearch/
+          gpgcheck={{ gpgcheck_base }}
+
+          {% if ansible_distribution == 'CentOS' %}
+          [centosplus]
+          name={{ ansible_distribution }}-$releasever - Plus - mirrors.aliyun.com
+          baseurl={{ os_repo_base_url }}/$releasever/centosplus/$basearch/
+          gpgcheck=1
+          enabled=0
+          {% endif %}
+
+    - name: Configure Alibaba Cloud EPEL repo
+      copy:
+        dest: /etc/yum.repos.d/epel.repo
+        content: |
+          [epel]
+          name=Extra Packages for Enterprise Linux {{ ansible_distribution_major_version }} - $basearch
+          baseurl={{ docker_epel_repo_base_url }}
+          failovermethod=priority
+          enabled=1
+          gpgcheck={{ gpgcheck_epel }}
+
+    - name: Clean package cache (RHEL family)
+      command: "{{ pkg_mgr }} clean all"
+
+    - name: Make package cache (RHEL family)
+      command: "{{ pkg_mgr }} makecache"
+
+    - name: Remove old Docker packages
+      package:
+        name:
+          - docker
+          - docker-client
+          - docker-client-latest
+          - docker-common
+          - docker-latest
+          - docker-latest-logrotate
+          - docker-logrotate
+          - docker-engine
+        state: absent
+
+    - name: Install yum-utils / dnf-utils
+      package:
+        name: "{{ 'dnf-utils' if pkg_mgr == 'dnf' else 'yum-utils' }}"
+        state: present
+
+    - name: Install device-mapper-persistent-data
+      package:
+        name: device-mapper-persistent-data
+        state: present
+
+    - name: Install lvm2
+      package:
+        name: lvm2
+        state: present
+
+    - name: Install curl (required for health checks)
+      package:
+        name: curl
+        state: present
+
+    - name: Add Docker CE repository (Aliyun mirror)
+      get_url:
+        url: "{{ docker_repo_host }}/docker-ce.repo"
+        dest: /etc/yum.repos.d/docker-ce.repo
+
+    - name: Install Docker CE
+      package:
+        name: "{{ docker_packages }}"
+        state: present
+        allow_downgrade: yes
+
+  when: ansible_os_family == "RedHat"
+
+# ========================
+# Ubuntu 安装流程
+# ========================
+- block:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
+        state: present
+
+    - name: Add Docker official GPG key
+      apt_key:
+        url: https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg
+        state: present
+
+    - name: Detect architecture
+      command: dpkg --print-architecture
+      register: dpkg_arch
+      changed_when: false
+
+    - name: Detect Ubuntu codename
+      command: lsb_release -cs
+      register: lsb_codename
+      changed_when: false
+
+    - name: Add Docker CE APT repository (Aliyun mirror)
+      apt_repository:
+        repo: "deb [arch={{ dpkg_arch.stdout }}] https://mirrors.aliyun.com/docker-ce/linux/ubuntu {{ lsb_codename.stdout }} stable"
+        state: present
+        filename: docker-ce
+
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+
+    - name: Remove old Docker packages
+      apt:
+        name:
+          - docker
+          - docker-engine
+          - docker.io
+          - containerd
+          - runc
+        state: absent
+
+    - name: Install Docker CE
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+
+  when: ansible_os_family == "Debian"
+
+# ========================
+# 通用配置（CentOS / Ubuntu 共用）
+# ========================
+- name: Add user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+  when: not ansible_check_mode
+
+- name: Install Docker Compose (binary)
+  copy:
+    src: docker-compose-Linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
+
+- name: Create docker-compose symlink
+  file:
+    src: /usr/local/bin/docker-compose
+    dest: /usr/bin/docker-compose
+    state: link
+  ignore_errors: yes
+
+- name: Create docker config directory
+  file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+
+- name: Configure Docker daemon with mirror acceleration
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "storage-driver": "overlay2",
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "100m",
+          "max-file": "3"
+        },
+        "registry-mirrors": [
+          "https://registry.cn-hangzhou.aliyuncs.com",
+          "https://docker.mirrors.ustc.edu.cn",
+          "https://hub-mirror.c.163.com"
+        ],
+        "insecure-registries": {{ docker_insecure_registries | to_json }}
+      }
+  notify: restart docker
+
+- name: Ensure systemd override directory exists
+  file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: '0755'
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  when: not ansible_check_mode
+
+- name: Restart Docker to apply mirror config
+  systemd:
+    name: docker
+    state: restarted
+    enabled: yes
+  when: not ansible_check_mode
+
+- name: Start Docker service if not already running
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  when: not ansible_check_mode
+
+- name: Set vm.max_map_count
+  sysctl:
+    name: vm.max_map_count
+    value: "{{ vm_max_map_count }}"
+    state: present
+    reload: yes
+
+- name: Set vm.swappiness
+  sysctl:
+    name: vm.swappiness
+    value: "{{ vm_swappiness }}"
+    state: present
+    reload: yes
+
+- name: Set file limits in /etc/security/limits.conf
+  pam_limits:
+    domain: '*'
+    limit_type: "{{ item.type }}"
+    limit_item: nofile
+    value: "{{ item.value }}"
+  loop:
+    - { type: soft, value: "{{ nofile_soft }}" }
+    - { type: hard, value: "{{ nofile_hard }}" }
+
+- name: Check if ELK Docker image exists locally
+  command: docker images -q {{ elk_image }}
+  register: image_check
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Pull ELK Docker image (with retry)
+  command: docker pull {{ elk_image }}
+  register: pull_result
+  retries: 5
+  delay: 10
+  until: pull_result.rc == 0
+  when: not ansible_check_mode and image_check.stdout is defined and image_check.stdout == ""
+  tags: pull_image
+
+- name: Display pull status
+  debug:
+    msg: "Docker image {{ elk_image }} is ready"
+  when: not ansible_check_mode and (image_check.stdout is defined and (image_check.stdout != "" or pull_result.rc is defined and pull_result.rc == 0))

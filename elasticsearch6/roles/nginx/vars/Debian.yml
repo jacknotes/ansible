@@ -1,0 +1,6 @@
+---
+# OS-specific variables for Debian/Ubuntu
+nginx_user: www-data
+nginx_pid: /run/nginx.pid
+nginx_conf_d_path: /etc/nginx/conf.d
+nginx_default_conf_path: /etc/nginx/sites-enabled/default

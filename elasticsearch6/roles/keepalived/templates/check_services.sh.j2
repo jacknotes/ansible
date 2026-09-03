@@ -1,0 +1,31 @@
+#!/bin/bash
+# Nginx + Elasticsearch 健康检查脚本
+# Managed by Ansible - Do not edit manually
+
+# 检查 Nginx
+check_nginx() {
+    pgrep -x nginx > /dev/null 2>&1
+    return $?
+}
+
+# 检查 Elasticsearch
+check_elasticsearch() {
+    curl -s -o /dev/null -w "%{http_code}" --connect-timeout 1 http://localhost:{{ es_http_port }}/_cluster/health 2>/dev/null | grep -q "200"
+    return $?
+}
+
+# Nginx：失败重启，1秒后再检查，失败则切换
+if ! check_nginx; then
+    systemctl restart nginx
+    sleep 1
+    if ! check_nginx; then
+        exit 1
+    fi
+fi
+
+# Elasticsearch：失败直接切换
+if ! check_elasticsearch; then
+    exit 1
+fi
+
+exit 0

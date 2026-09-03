@@ -1,0 +1,43 @@
+# Elasticsearch Docker Compose Template
+version: "3.8"
+
+services:
+  elasticsearch:
+    image: {{ elk_image }}
+    container_name: {{ inventory_hostname }}
+    hostname: {{ inventory_hostname }}
+    environment:
+      - ELASTICSEARCH_START=1
+      - LOGSTASH_START=0
+      - KIBANA_START=0
+      - ES_HEAP_SIZE={{ es_heap_size }}
+      - TZ={{ timezone }}
+      - ES_CONNECT_RETRY=180
+    volumes:
+      - {{ deploy_dir }}/es-data/{{ inventory_hostname }}:/var/lib/elasticsearch
+      - {{ deploy_dir }}/es-logs/{{ inventory_hostname }}:/var/log/elasticsearch
+      - {{ deploy_dir }}/elasticsearch.yml:/etc/elasticsearch/elasticsearch.yml
+      - {{ es_snapshot_repo_path }}:/snapshots
+    ports:
+      - "{{ es_http_port }}:9200"
+      - "{{ es_transport_port }}:9300"
+    networks:
+      - elk-network
+    mem_limit: {{ es_memory_limit }}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: {{ nofile_soft }}
+        hard: {{ nofile_hard }}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  elk-network:
+    driver: bridge

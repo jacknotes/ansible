@@ -1,0 +1,8 @@
+---
+# OS-specific variables for Debian/Ubuntu
+docker_repo_baseurl: "https://mirrors.aliyun.com/docker-ce/linux/ubuntu"
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
