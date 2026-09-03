@@ -23,7 +23,7 @@ vrrp_script check_services {
 
 # VRRP 实例配置
 vrrp_instance VI_1 {
-    state {{ 'MASTER' if inventory_hostname == 'node01' else 'BACKUP' }}
+    state BACKUP
     interface {{ keepalived_interface }}
     virtual_router_id {{ keepalived_virtual_router_id }}
 

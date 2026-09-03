@@ -1,20 +1,29 @@
 #!/bin/bash
-# Nginx + Elasticsearch 健康检查脚本
+# Keepalived 健康检查脚本 - 按节点实际运行的服务动态生成
 # Managed by Ansible - Do not edit manually
+# 规则（默认 auto，按部署时服务运行状态判断；可用 keepalived_check_nginx / keepalived_check_es 强制 yes/no）：
+#   只运行 keepalived（nginx 未运行）  -> 只检测 Elasticsearch
+#   只运行 nginx（ES 未监听）          -> 只检测 Nginx
+#   nginx 与 ES 均在运行               -> 同时检测 Nginx 和 Elasticsearch
 
-# 检查 Nginx
+{% if keepalived_check_nginx %}
+# 检查 Nginx（本节点 Nginx 处于运行状态）
 check_nginx() {
     pgrep -x nginx > /dev/null 2>&1
     return $?
 }
+{% endif %}
 
-# 检查 Elasticsearch
+{% if keepalived_check_es %}
+# 检查 Elasticsearch（本节点 Elasticsearch 在监听）
 check_elasticsearch() {
     curl -s -o /dev/null -w "%{http_code}" --connect-timeout 1 http://localhost:{{ es_http_port }}/_cluster/health 2>/dev/null | grep -q "200"
     return $?
 }
+{% endif %}
 
-# Nginx：失败重启，1秒后再检查，失败则切换
+{% if keepalived_check_nginx %}
+# Nginx：失败重启，1秒后再检查，仍失败则切换
 if ! check_nginx; then
     systemctl restart nginx
     sleep 1
@@ -22,10 +31,13 @@ if ! check_nginx; then
         exit 1
     fi
 fi
+{% endif %}
 
+{% if keepalived_check_es %}
 # Elasticsearch：失败直接切换
 if ! check_elasticsearch; then
     exit 1
 fi
+{% endif %}
 
 exit 0

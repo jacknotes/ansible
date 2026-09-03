@@ -1,0 +1,3 @@
+---
+# node01 网卡为 ens33，覆盖 group_vars/all/all.yml 中的默认值 eth0
+keepalived_interface: ens33

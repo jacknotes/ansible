@@ -8,7 +8,7 @@
 
 # 使用sebp/elk集成镜像（公共镜像）
 # 如需使用内部私有仓库镜像，请在 secrets.yml 中覆盖 elk_image 变量
-elk_image: sebp/elk:651
+elk_image: harborrepo.hs.com/ops/elk:640
 
 # 或者使用官方分离镜像（取消注释以下配置）
 # es_image: docker.elastic.co/elasticsearch/elasticsearch:6.8.23
@@ -22,10 +22,10 @@ elk_image: sebp/elk:651
 cluster_name: eslog-cluster
 
 # Elasticsearch配置
-es_heap_size: 8192m
+es_heap_size: 1024m
 es_http_port: 9200
 es_transport_port: 9300
-es_memory_limit: 16g
+es_memory_limit: 2g
 es_snapshot_repo_path: /opt/eslog-cluster/es-snapshots
 
 # 时区配置
@@ -66,7 +66,7 @@ kibana_domain: kibana.example.com
 # ===========================================
 # Keepalived VIP 配置
 # ===========================================
-keepalived_virtual_ip: 10.0.0.100/24   # 替换为你的实际 VIP 地址
+keepalived_virtual_ip: 172.168.2.48/24   # 替换为你的实际 VIP 地址
 keepalived_interface: eth0
 keepalived_virtual_router_id: 170
 # keepalived_auth_pass 定义在 secrets.yml
@@ -76,19 +76,8 @@ keepalived_priority_node03: 100
 
 # 单播模式配置（替代广播，更安全）
 keepalived_unicast: true
+# Keepalived 检测脚本决策变量（默认 auto：按部署时服务运行状态自动判断）
+keepalived_check_nginx: auto   # auto / yes/no（true/false 亦可）
+keepalived_check_es: yes      # auto / yes/no（true/false 亦可）
 
-# ===========================================
-# Keepalived 通知配置（均为可选，独立控制）
-# ===========================================
 
-# 钉钉 Webhook 通知
-# keepalived_dingtalk_webhook 定义在 secrets.yml
-keepalived_dingtalk_enabled: true
-
-# 邮件通知
-# keepalived_email_to、keepalived_email_smtp_pass、keepalived_email_smtp_user 定义在 secrets.yml
-keepalived_email_enabled: false
-keepalived_email_to: "admin@example.com"      # 覆盖: keepalived_email_to in secrets.yml
-keepalived_email_smtp_server: "smtp.example.com"  # 覆盖: keepalived_email_smtp_server in secrets.yml
-keepalived_email_smtp_port: 465
-keepalived_email_smtp_user: "alert@example.com"   # 覆盖: keepalived_email_smtp_user in secrets.yml

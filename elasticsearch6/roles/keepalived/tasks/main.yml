@@ -10,7 +10,6 @@
     - "default.yml"
   tags: always
 
-<longcat_arg_value>
 
 - block:
     - name: Install Keepalived (RHEL family)
@@ -78,7 +77,28 @@
     mode: '0644'
   when: (keepalived_dingtalk_enabled | default(false)) or (keepalived_email_enabled | default(false))
 
-- name: Deploy health check script (Nginx + Elasticsearch)
+- name: Detect whether Nginx is running on this host
+  shell: "systemctl is-active nginx"
+  register: keepalived_nginx_running
+  changed_when: false
+  failed_when: false
+
+- name: Detect whether Elasticsearch is listening on this host
+  shell: "ss -tln | grep -q ':{{ es_http_port }} '"
+  register: keepalived_es_listening
+  changed_when: false
+  failed_when: false
+
+# 决策变量：默认 auto（按运行状态自动判断），可在 group_vars 中强制 yes/no
+- name: Decide whether check script should check Nginx
+  set_fact:
+    keepalived_check_nginx: "{{ (keepalived_check_nginx | default('auto')) | string | lower in ['yes', 'true'] or ((keepalived_check_nginx | default('auto')) | string | lower == 'auto' and keepalived_nginx_running.rc == 0) }}"
+
+- name: Decide whether check script should check Elasticsearch
+  set_fact:
+    keepalived_check_es: "{{ (keepalived_check_es | default('auto')) | string | lower in ['yes', 'true'] or ((keepalived_check_es | default('auto')) | string | lower == 'auto' and keepalived_es_listening.rc == 0) }}"
+
+- name: Deploy health check script (dynamic by deployed services)
   template:
     src: check_services.sh.j2
     dest: /etc/keepalived/scripts/check_services.sh
