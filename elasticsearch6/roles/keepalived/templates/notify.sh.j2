@@ -46,9 +46,20 @@ send_email() {
     local state=$1
     local subject="[ELK] VIP ${state} - ${HOSTNAME}"
     local body="节点: ${HOSTNAME}\n状态: ${state}\nVIP: ${VIP}\n时间: ${TIMESTAMP}"
-    
-    echo -e "$body" | mail -s "$subject" -S smtp="{{ keepalived_email_smtp_server }}:{{ keepalived_email_smtp_port }}" "{{ keepalived_email_to }}"
-    log "Email sent: ${state}"
+
+    # SMTP 配置在 /etc/s-nail.rc（由 Ansible 部署），GNU mailutils 不支持该配置，需优先选择 s-nail
+    local mailbin
+    mailbin="$(command -v s-nail 2>/dev/null || command -v mailx 2>/dev/null || command -v mail 2>/dev/null)"
+    if [ -z "$mailbin" ]; then
+        log "Email skipped: no mailx implementation found"
+        return 1
+    fi
+
+    if echo -e "$body" | "$mailbin" -s "$subject" -r "{{ keepalived_email_smtp_user }}" "{{ keepalived_email_to }}" >> "$LOG_FILE" 2>&1; then
+        log "Email sent: ${state} (via $(basename "$mailbin"))"
+    else
+        log "Email FAILED: ${state} (via $(basename "$mailbin"))"
+    fi
 }
 {% endif %}
 

@@ -1,10 +1,16 @@
-# Mailx SMTP Configuration
+# Mailx (s-nail) SMTP Configuration for Keepalived email notifications
 # Managed by Ansible - Do not edit manually
-# 用于 Keepalived 邮件通知
+# 使用 s-nail 推荐的 mta URL 语法（需同时开启 v15-compat）；
+# 旧式 smtp/smtp-auth 变量在 s-nail 14.9.24+ 已标记弃用，v15 将移除
+# 凭据经 URL 编码，密码含特殊字符也可安全使用
 
+set v15-compat
 set from={{ keepalived_email_smtp_user }}
-set smtp={{ keepalived_email_smtp_server }}
-set smtp-auth=login
-set smtp-auth-user={{ keepalived_email_smtp_user }}
-set smtp-auth-password={{ keepalived_email_smtp_pass }}
-set ssl-verify=ignore
+{% if keepalived_email_smtp_port | int == 465 %}
+# 465 端口为隐式 SSL，必须使用 smtps:// 协议头
+set mta=smtps://{{ keepalived_email_smtp_user | urlencode }}:{{ keepalived_email_smtp_pass | urlencode }}@{{ keepalived_email_smtp_server }}:{{ keepalived_email_smtp_port }}
+{% else %}
+# 25/587 端口，s-nail 在服务器支持时会自动尝试 STARTTLS
+set mta=smtp://{{ keepalived_email_smtp_user | urlencode }}:{{ keepalived_email_smtp_pass | urlencode }}@{{ keepalived_email_smtp_server }}:{{ keepalived_email_smtp_port }}
+{% endif %}
+set tls-verify=ignore

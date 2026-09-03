@@ -47,9 +47,11 @@
         name: keepalived
         state: present
 
-    - name: Install mailutils for email notifications (Ubuntu)
+    - name: Install s-nail for email notifications (Ubuntu)
+      # 注意: notify.sh/mailrc 使用 s-nail (heirloom-mailx) 语法（-S smtp=、smtp-auth= 等），
+      # GNU mailutils 不支持这些语法，会导致 "mail: unrecognized option '-S'"
       apt:
-        name: mailutils
+        name: s-nail
         state: present
       when: keepalived_email_enabled | default(false)
 
@@ -114,6 +116,15 @@
     group: root
     mode: '0755'
   when: (keepalived_dingtalk_enabled | default(false)) or (keepalived_email_enabled | default(false))
+
+- name: Deploy s-nail SMTP configuration (/etc/s-nail.rc)
+  template:
+    src: mailrc.j2
+    dest: /etc/s-nail.rc
+    owner: root
+    group: root
+    mode: '0600'
+  when: keepalived_email_enabled | default(false)
 
 - name: Deploy Keepalived configuration
   template:
